@@ -193,29 +193,66 @@ def run_automation(job_id, username, password, loans, headless):
 
         # ── Chrome options ──
         opts = Options()
-        opts.add_argument("--headless=new")   # always headless on server
+        opts.add_argument("--headless=new")
         opts.add_argument("--no-sandbox")
         opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--disable-gpu")
+        opts.add_argument("--disable-setuid-sandbox")
         opts.add_argument("--window-size=1280,900")
         opts.add_argument("--disable-blink-features=AutomationControlled")
+        opts.add_argument("--disable-extensions")
+        opts.add_argument("--disable-software-rasterizer")
+        opts.add_argument("--remote-debugging-port=9222")
         opts.add_experimental_option("excludeSwitches", ["enable-automation"])
         opts.add_experimental_option("useAutomationExtension", False)
 
-        # Railway / Render provide chromedriver at known path
-        CHROMEDRIVER = os.environ.get("CHROMEDRIVER_PATH", "/usr/bin/chromedriver")
-        CHROME_BIN   = os.environ.get("GOOGLE_CHROME_BIN", "/usr/bin/google-chrome")
-        if os.path.exists(CHROME_BIN):
-            opts.binary_location = CHROME_BIN
+        # ── Find Chromium/Chrome binary ──
+        CHROME_BIN = os.environ.get("GOOGLE_CHROME_BIN", "")
+        for candidate in [
+            CHROME_BIN,
+            "/usr/bin/chromium",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+        ]:
+            if candidate and os.path.exists(candidate):
+                opts.binary_location = candidate
+                _log(job_id, f"[BROWSER] Using binary: {candidate}")
+                break
 
-        try:
-            service = Service(CHROMEDRIVER)
-            driver  = webdriver.Chrome(service=service, options=opts)
-        except Exception:
-            # Fall back to webdriver-manager (local dev)
-            from webdriver_manager.chrome import ChromeDriverManager
-            service = Service(ChromeDriverManager().install())
-            driver  = webdriver.Chrome(service=service, options=opts)
+        # ── Find ChromeDriver ──
+        CHROMEDRIVER = os.environ.get("CHROMEDRIVER_PATH", "")
+        driver = None
+        errors = []
+        for cd in [
+            CHROMEDRIVER,
+            "/usr/bin/chromedriver",
+            "/usr/lib/chromium/chromedriver",
+            "/usr/lib/chromium-browser/chromedriver",
+        ]:
+            if not cd: continue
+            if not os.path.exists(cd): continue
+            try:
+                service = Service(cd)
+                driver  = webdriver.Chrome(service=service, options=opts)
+                _log(job_id, f"[BROWSER] ✓ Started with chromedriver: {cd}")
+                break
+            except Exception as e:
+                errors.append(f"{cd}: {e}")
+
+        if not driver:
+            # Last resort: webdriver-manager (local dev)
+            try:
+                from webdriver_manager.chrome import ChromeDriverManager
+                service = Service(ChromeDriverManager().install())
+                driver  = webdriver.Chrome(service=service, options=opts)
+                _log(job_id, "[BROWSER] ✓ Started via webdriver-manager")
+            except Exception as e:
+                errors.append(f"webdriver-manager: {e}")
+                _log(job_id, f"[BROWSER] ✗ All methods failed: {errors}")
+                _set_status(job_id, "error")
+                jobs[job_id]["error_message"] = f"Could not start Chrome. Errors: {errors}"
+                return
 
         driver.execute_script(
             "Object.defineProperty(navigator,'webdriver',{get:()=>undefined})"
