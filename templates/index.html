@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HDB CrossSell — Eligibility Checker</title>
+<style>
+:root {
+  --navy:       #0E2A47;
+  --navy-deep:  #081A2E;
+  --teal:       #2BB3A3;
+  --teal-dark:  #239186;
+  --paper:      #F0F4F8;
+  --line:       #DCE3E9;
+  --ink:        #1B2733;
+  --muted:      #6B7785;
+  --eligible:   #1E8E5A;
+  --elig-bg:    #E5F5EE;
+  --no-elig:    #C24A4A;
+  --no-elig-bg: #FBEAEA;
+  --warn:       #C98A1F;
+  --warn-bg:    #FCF3E2;
+  --radius:     12px;
+  --shadow:     0 2px 12px rgba(14,42,71,0.08);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--paper);color:var(--ink);min-height:100vh;}
+
+/* ── TOP BAR ── */
+.topbar{
+  background:linear-gradient(135deg,var(--navy) 0%,var(--navy-deep) 100%);
+  color:#fff;padding:20px 24px;
+  display:flex;align-items:center;gap:16px;
+}
+.topbar-logo{
+  width:44px;height:44px;background:rgba(255,255,255,0.12);
+  border-radius:10px;display:flex;align-items:center;justify-content:center;
+  font-size:22px;flex-shrink:0;
+}
+.topbar h1{font-size:1.2rem;font-weight:700;letter-spacing:.3px;}
+.topbar p{font-size:0.8rem;color:#B9C6D6;margin-top:2px;}
+
+/* ── LAYOUT ── */
+.container{max-width:720px;margin:0 auto;padding:28px 16px 80px;}
+
+/* ── CARD ── */
+.card{
+  background:#fff;border:1px solid var(--line);border-radius:var(--radius);
+  padding:24px;margin-bottom:20px;box-shadow:var(--shadow);
+}
+.card-title{
+  font-size:0.9rem;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.8px;margin-bottom:18px;
+  display:flex;align-items:center;gap:8px;
+}
+.card-title::before{
+  content:'';display:block;width:3px;height:16px;
+  background:var(--teal);border-radius:2px;
+}
+
+/* ── FORM ELEMENTS ── */
+.field{margin-bottom:16px;}
+.field label{display:block;font-size:0.8rem;font-weight:600;color:var(--muted);margin-bottom:6px;}
+.field input[type=text],
+.field input[type=password]{
+  width:100%;padding:10px 14px;border:1.5px solid var(--line);
+  border-radius:8px;font-size:0.95rem;color:var(--ink);
+  transition:border-color .15s;background:#fff;
+}
+.field input:focus{outline:none;border-color:var(--teal);}
+
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+@media(max-width:500px){.field-row{grid-template-columns:1fr;}}
+
+/* ── FILE DROP ── */
+.drop-zone{
+  border:2px dashed var(--line);border-radius:10px;
+  padding:28px 20px;text-align:center;cursor:pointer;
+  background:#FAFBFC;transition:border-color .15s,background .15s;
+  position:relative;
+}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--teal);background:#F0FBF9;}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.drop-zone .icon{font-size:2rem;margin-bottom:8px;}
+.drop-zone .main-text{font-size:0.9rem;font-weight:600;color:var(--navy);}
+.drop-zone .hint{font-size:0.78rem;color:var(--muted);margin-top:4px;}
+.drop-zone .fname{
+  font-size:0.82rem;font-weight:600;color:var(--teal);margin-top:8px;
+  word-break:break-all;
+}
+
+/* ── TOGGLE ── */
+.toggle-row{
+  display:flex;align-items:center;gap:10px;
+  font-size:0.83rem;color:var(--muted);margin-top:16px;
+}
+.toggle-row input[type=checkbox]{
+  width:16px;height:16px;accent-color:var(--teal);cursor:pointer;
+}
+
+/* ── BUTTON ── */
+.btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  width:100%;padding:13px 18px;margin-top:20px;
+  border:none;border-radius:10px;font-size:0.95rem;font-weight:700;
+  cursor:pointer;transition:transform .1s,box-shadow .1s,background .15s;
+  letter-spacing:.3px;
+}
+.btn:active{transform:scale(0.98);}
+.btn-primary{background:linear-gradient(135deg,var(--navy),var(--navy-deep));color:#fff;box-shadow:0 3px 12px rgba(14,42,71,0.25);}
+.btn-primary:hover:not(:disabled){box-shadow:0 4px 18px rgba(14,42,71,0.35);}
+.btn-primary:disabled{background:#B9C6D6;cursor:not-allowed;box-shadow:none;}
+.btn-teal{background:linear-gradient(135deg,var(--teal),var(--teal-dark));color:#fff;box-shadow:0 3px 12px rgba(43,179,163,0.3);}
+.btn-teal:hover{box-shadow:0 4px 18px rgba(43,179,163,0.4);}
+
+/* ── PROGRESS ── */
+.progress-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.pill{
+  font-size:0.75rem;font-weight:700;padding:4px 12px;border-radius:999px;
+  text-transform:uppercase;letter-spacing:.5px;
+}
+.pill-running{background:#DDEFFB;color:#1A6FA8;}
+.pill-done{background:var(--elig-bg);color:var(--eligible);}
+.pill-error{background:var(--no-elig-bg);color:var(--no-elig);}
+.pill-waiting_otp{background:var(--warn-bg);color:var(--warn);}
+.pill-starting{background:var(--line);color:var(--muted);}
+
+.progress-track{background:var(--line);border-radius:999px;height:10px;overflow:hidden;margin-bottom:8px;}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--teal),var(--navy));width:0%;transition:width .4s ease;}
+.progress-meta{display:flex;justify-content:space-between;font-size:0.78rem;color:var(--muted);}
+
+/* ── COUNTS ── */
+.counts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:16px;}
+@media(max-width:480px){.counts{grid-template-columns:repeat(2,1fr);}}
+.count-box{border-radius:10px;padding:12px 8px;text-align:center;}
+.count-box .num{font-size:1.5rem;font-weight:800;line-height:1;}
+.count-box .lbl{font-size:0.7rem;font-weight:600;margin-top:4px;text-transform:uppercase;letter-spacing:.5px;}
+.count-eligible{background:var(--elig-bg);color:var(--eligible);}
+.count-not{background:var(--no-elig-bg);color:var(--no-elig);}
+.count-err{background:var(--warn-bg);color:var(--warn);}
+.count-unk{background:#F3F0FF;color:#6B3FB0;}
+
+/* ── LOG BOX ── */
+.log-box{
+  margin-top:16px;background:#0D1F33;color:#A8D8CF;
+  border-radius:10px;padding:14px;
+  font-family:'Consolas','Courier New',monospace;font-size:0.73rem;
+  line-height:1.55;max-height:220px;overflow-y:auto;white-space:pre-wrap;
+}
+.log-box::-webkit-scrollbar{width:4px;}
+.log-box::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15);border-radius:2px;}
+
+/* ── OTP MODAL ── */
+.overlay{
+  position:fixed;inset:0;background:rgba(8,26,46,0.6);
+  display:flex;align-items:center;justify-content:center;
+  z-index:100;padding:16px;backdrop-filter:blur(3px);
+}
+.overlay.hidden{display:none;}
+.modal{
+  background:#fff;border-radius:16px;padding:30px 26px;
+  max-width:360px;width:100%;text-align:center;
+  box-shadow:0 20px 60px rgba(8,26,46,0.3);
+}
+.modal-icon{font-size:2.5rem;margin-bottom:10px;}
+.modal h3{font-size:1.1rem;color:var(--navy);margin-bottom:6px;}
+.modal p{font-size:0.83rem;color:var(--muted);margin-bottom:18px;line-height:1.5;}
+.otp-field{
+  font-size:1.6rem;text-align:center;letter-spacing:8px;
+  padding:12px;font-weight:800;color:var(--navy);
+  border:2px solid var(--line);border-radius:10px;width:100%;
+}
+.otp-field:focus{outline:none;border-color:var(--teal);}
+.otp-error{font-size:0.78rem;color:var(--no-elig);margin-top:8px;min-height:18px;}
+
+/* ── MISC ── */
+.hidden{display:none!important;}
+.err-msg{font-size:0.8rem;color:var(--no-elig);margin-top:8px;min-height:18px;}
+.divider{display:flex;align-items:center;gap:10px;margin:20px 0 4px;}
+.divider span{font-size:0.8rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;white-space:nowrap;}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--line);}
+</style>
+</head>
+<body>
+
+<!-- ── TOPBAR ── -->
+<div class="topbar">
+  <div class="topbar-logo">🏦</div>
+  <div>
+    <h1>HDB CrossSell — Eligibility Checker</h1>
+    <p>Upload your customer list &amp; get a PDF report automatically</p>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- ══ SETUP CARD ══ -->
+  <div class="card" id="setupCard">
+    <div class="card-title">Step 1 — Sign in</div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="username">Username</label>
+        <input type="text" id="username" placeholder="e.g. CTL4021313" autocomplete="username">
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Your password" autocomplete="current-password">
+      </div>
+    </div>
+
+    <div class="divider"><span>Step 2 — Upload file</span></div>
+
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="customerFile" accept=".txt">
+      <div class="icon">📄</div>
+      <div class="main-text">Click or drag &amp; drop your <strong>customer.txt</strong></div>
+      <div class="hint">Format: <code>loan_number,customer_name</code> — one per line</div>
+      <div class="fname" id="fileName"></div>
+    </div>
+
+    <div class="toggle-row">
+      <input type="checkbox" id="headlessToggle" checked>
+      <label for="headlessToggle">Run browser in background (recommended)</label>
+    </div>
+
+    <button class="btn btn-primary" id="startBtn">
+      🚀 Start Checking Eligibility
+    </button>
+    <div class="err-msg" id="setupError"></div>
+  </div>
+
+  <!-- ══ PROGRESS CARD ══ -->
+  <div class="card hidden" id="progressCard">
+    <div class="progress-header">
+      <div class="card-title" style="margin:0;">Live Progress</div>
+      <div class="pill pill-starting" id="statusPill">starting</div>
+    </div>
+
+    <div class="progress-track">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-meta">
+      <span id="progressText">0 / 0</span>
+      <span id="progressPercent">0%</span>
+    </div>
+
+    <div class="counts">
+      <div class="count-box count-eligible">
+        <div class="num" id="cEligible">0</div>
+        <div class="lbl">✅ Eligible</div>
+      </div>
+      <div class="count-box count-not">
+        <div class="num" id="cNotEligible">0</div>
+        <div class="lbl">❌ Not Eligible</div>
+      </div>
+      <div class="count-box count-err">
+        <div class="num" id="cError">0</div>
+        <div class="lbl">⚠ Errors</div>
+      </div>
+      <div class="count-box count-unk">
+        <div class="num" id="cUnknown">0</div>
+        <div class="lbl">? Unknown</div>
+      </div>
+    </div>
+
+    <div class="log-box" id="logBox">Waiting to start...</div>
+
+    <button class="btn btn-teal hidden" id="downloadBtn">
+      ⬇ Download PDF Report
+    </button>
+  </div>
+
+</div>
+
+<!-- ══ OTP MODAL ══ -->
+<div class="overlay hidden" id="otpOverlay">
+  <div class="modal">
+    <div class="modal-icon">🔐</div>
+    <h3>Enter Your OTP</h3>
+    <p>
+      Automation is paused. Open your <strong>Cymmetri Authenticator</strong> app
+      and enter the 6-digit code below to continue.
+    </p>
+    <input type="text" id="otpInput" class="otp-field"
+           maxlength="6" inputmode="numeric" placeholder="000000"
+           autocomplete="one-time-code">
+    <div class="otp-error" id="otpError"></div>
+    <button class="btn btn-primary" id="otpSubmitBtn" style="margin-top:14px;">
+      ✅ Submit OTP
+    </button>
+  </div>
+</div>
+
+<script>
+let jobId = null, pollTimer = null;
+
+/* ── File drag-drop ── */
+const dropZone   = document.getElementById('dropZone');
+const fileInput  = document.getElementById('customerFile');
+const fileNameEl = document.getElementById('fileName');
+
+['dragover','dragenter'].forEach(e =>
+  dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.add('drag'); })
+);
+['dragleave','dragend'].forEach(e =>
+  dropZone.addEventListener(e, () => dropZone.classList.remove('drag'))
+);
+dropZone.addEventListener('drop', ev => {
+  ev.preventDefault(); dropZone.classList.remove('drag');
+  if (ev.dataTransfer.files.length) { fileInput.files = ev.dataTransfer.files; showName(); }
+});
+fileInput.addEventListener('change', showName);
+function showName() {
+  fileNameEl.textContent = fileInput.files.length ? '✓ ' + fileInput.files[0].name : '';
+}
+
+/* ── Start button ── */
+document.getElementById('startBtn').addEventListener('click', async () => {
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value.trim();
+  const headless = document.getElementById('headlessToggle').checked;
+  const errEl    = document.getElementById('setupError');
+  errEl.textContent = '';
+
+  if (!username || !password) { errEl.textContent = 'Please enter username and password.'; return; }
+  if (!fileInput.files.length) { errEl.textContent = 'Please select your customer.txt file.'; return; }
+
+  const fd = new FormData();
+  fd.append('username', username);
+  fd.append('password', password);
+  fd.append('headless', headless ? 'true' : 'false');
+  fd.append('customer_file', fileInput.files[0]);
+
+  const btn = document.getElementById('startBtn');
+  btn.disabled = true; btn.textContent = '⏳ Starting...';
+
+  try {
+    const res  = await fetch('/api/start', { method:'POST', body:fd });
+    const data = await res.json();
+    if (data.error) {
+      errEl.textContent = data.error;
+      btn.disabled = false; btn.innerHTML = '🚀 Start Checking Eligibility';
+      return;
+    }
+    jobId = data.job_id;
+    document.getElementById('setupCard').classList.add('hidden');
+    document.getElementById('progressCard').classList.remove('hidden');
+    document.getElementById('progressText').textContent = `0 / ${data.total}`;
+    startPolling();
+  } catch (err) {
+    errEl.textContent = 'Could not connect to server: ' + err;
+    btn.disabled = false; btn.innerHTML = '🚀 Start Checking Eligibility';
+  }
+});
+
+/* ── Polling ── */
+function startPolling() { pollTimer = setInterval(poll, 1600); poll(); }
+
+async function poll() {
+  if (!jobId) return;
+  try {
+    const data = await fetch(`/api/status/${jobId}`).then(r => r.json());
+    render(data);
+
+    if (data.status === 'waiting_otp') showOtp();
+    else hideOtp();
+
+    if (data.status === 'done' || data.status === 'error') {
+      clearInterval(pollTimer);
+      if (data.status === 'done') {
+        const dl = document.getElementById('downloadBtn');
+        dl.classList.remove('hidden');
+        dl.onclick = () => window.location.href = `/download/${jobId}`;
+      }
+    }
+  } catch (e) { console.error(e); }
+}
+
+function render(data) {
+  const pill = document.getElementById('statusPill');
+  pill.textContent  = data.status.replace('_',' ');
+  pill.className    = 'pill pill-' + data.status;
+
+  const pct = data.total ? Math.round((data.current / data.total) * 100) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressText').textContent = `${data.current} / ${data.total}`;
+  document.getElementById('progressPercent').textContent = pct + '%';
+
+  document.getElementById('cEligible').textContent   = data.counts['ELIGIBLE'] || 0;
+  document.getElementById('cNotEligible').textContent = data.counts['NOT ELIGIBLE'] || 0;
+  document.getElementById('cError').textContent       = data.counts['ERROR'] || 0;
+  document.getElementById('cUnknown').textContent     = data.counts['UNKNOWN'] || 0;
+
+  const lb = document.getElementById('logBox');
+  lb.textContent = data.logs.join('\n');
+  lb.scrollTop   = lb.scrollHeight;
+
+  if (data.status === 'error' && data.error_message)
+    lb.textContent += '\n\n❌ FATAL ERROR: ' + data.error_message;
+}
+
+/* ── OTP modal ── */
+function showOtp() { document.getElementById('otpOverlay').classList.remove('hidden'); }
+function hideOtp() { document.getElementById('otpOverlay').classList.add('hidden'); }
+
+document.getElementById('otpSubmitBtn').addEventListener('click', submitOtp);
+document.getElementById('otpInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitOtp();
+});
+
+async function submitOtp() {
+  const otp   = document.getElementById('otpInput').value.trim();
+  const errEl = document.getElementById('otpError');
+  errEl.textContent = '';
+
+  if (!/^\d{6}$/.test(otp)) { errEl.textContent = 'Enter the 6-digit code from your app.'; return; }
+
+  const btn = document.getElementById('otpSubmitBtn');
+  btn.disabled = true; btn.textContent = '⏳ Submitting...';
+
+  try {
+    const res  = await fetch(`/api/submit_otp/${jobId}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ otp })
+    });
+    const data = await res.json();
+    if (data.error) { errEl.textContent = data.error; }
+    else {
+      document.getElementById('otpInput').value = '';
+      hideOtp();
+    }
+  } catch (e) {
+    errEl.textContent = 'Could not submit: ' + e;
+  }
+  btn.disabled = false; btn.textContent = '✅ Submit OTP';
+}
+</script>
+</body>
+</html>
