@@ -206,53 +206,50 @@ def run_automation(job_id, username, password, loans, headless):
         opts.add_experimental_option("excludeSwitches", ["enable-automation"])
         opts.add_experimental_option("useAutomationExtension", False)
 
-        # ── Find Chromium/Chrome binary ──
-        CHROME_BIN = os.environ.get("GOOGLE_CHROME_BIN", "")
-        for candidate in [
-            CHROME_BIN,
-            "/usr/bin/chromium",
-            "/usr/bin/chromium-browser",
-            "/usr/bin/google-chrome",
-            "/usr/bin/google-chrome-stable",
-        ]:
-            if candidate and os.path.exists(candidate):
-                opts.binary_location = candidate
-                _log(job_id, f"[BROWSER] Using binary: {candidate}")
-                break
+        # ── Find Chromium/Chrome binary (supports Nixpacks nix store paths) ──
+        import shutil, glob
 
-        # ── Find ChromeDriver ──
-        CHROMEDRIVER = os.environ.get("CHROMEDRIVER_PATH", "")
+        def find_binary(names):
+            for name in names:
+                path = shutil.which(name)
+                if path:
+                    return path
+            for name in names:
+                matches = glob.glob(f"/nix/store/*/bin/{name}") + glob.glob(f"/nix/store/*/{name}")
+                if matches:
+                    return sorted(matches)[-1]
+            return None
+
+        chrome_bin = find_binary(["chromium", "chromium-browser", "chromium-headless-shell", "google-chrome", "google-chrome-stable"])
+        chromedriver_bin = find_binary(["chromedriver"])
+
+        _log(job_id, f"[BROWSER] chrome_bin={chrome_bin}")
+        _log(job_id, f"[BROWSER] chromedriver={chromedriver_bin}")
+
+        if not chrome_bin:
+            _log(job_id, "[BROWSER] ✗ No Chrome/Chromium found!")
+            _set_status(job_id, "error")
+            jobs[job_id]["error_message"] = "Chromium not found on server"
+            return
+
+        if not chromedriver_bin:
+            _log(job_id, "[BROWSER] ✗ chromedriver not found!")
+            _set_status(job_id, "error")
+            jobs[job_id]["error_message"] = "chromedriver not found on server"
+            return
+
+        opts.binary_location = chrome_bin
+
         driver = None
-        errors = []
-        for cd in [
-            CHROMEDRIVER,
-            "/usr/bin/chromedriver",
-            "/usr/lib/chromium/chromedriver",
-            "/usr/lib/chromium-browser/chromedriver",
-        ]:
-            if not cd: continue
-            if not os.path.exists(cd): continue
-            try:
-                service = Service(cd)
-                driver  = webdriver.Chrome(service=service, options=opts)
-                _log(job_id, f"[BROWSER] ✓ Started with chromedriver: {cd}")
-                break
-            except Exception as e:
-                errors.append(f"{cd}: {e}")
-
-        if not driver:
-            # Last resort: webdriver-manager (local dev)
-            try:
-                from webdriver_manager.chrome import ChromeDriverManager
-                service = Service(ChromeDriverManager().install())
-                driver  = webdriver.Chrome(service=service, options=opts)
-                _log(job_id, "[BROWSER] ✓ Started via webdriver-manager")
-            except Exception as e:
-                errors.append(f"webdriver-manager: {e}")
-                _log(job_id, f"[BROWSER] ✗ All methods failed: {errors}")
-                _set_status(job_id, "error")
-                jobs[job_id]["error_message"] = f"Could not start Chrome. Errors: {errors}"
-                return
+        try:
+            service = Service(chromedriver_bin)
+            driver  = webdriver.Chrome(service=service, options=opts)
+            _log(job_id, "[BROWSER] ✓ Chrome started!")
+        except Exception as e:
+            _log(job_id, f"[BROWSER] ✗ Failed: {e}")
+            _set_status(job_id, "error")
+            jobs[job_id]["error_message"] = str(e)
+            return
 
         driver.execute_script(
             "Object.defineProperty(navigator,'webdriver',{get:()=>undefined})"
